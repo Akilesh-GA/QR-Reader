@@ -24,7 +24,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Yarn Scanner')),
+      appBar: AppBar(automaticallyImplyLeading: false,title: const Text('Yarn Scanner')),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: _isLoading ? _shimmerLoader() : _mainContent(context),

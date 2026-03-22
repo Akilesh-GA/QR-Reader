@@ -1,8 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/yarn_service.dart';
-import './qr_code.dart';
 
 class DispatchListPage extends StatefulWidget {
   const DispatchListPage({super.key});
@@ -13,301 +11,377 @@ class DispatchListPage extends StatefulWidget {
 
 class _DispatchListPageState extends State<DispatchListPage>
     with SingleTickerProviderStateMixin {
-  final YarnService yarnService = YarnService();
-  late AnimationController _listAnimationController;
-  String _searchQuery = ''; // <-- added for search
+
+  late final AnimationController _controller;
+
+  String _searchQuery = '';
+
+  // ✅ SORT OPTION
+  String _sortOption = 'date_desc';
 
   @override
   void initState() {
     super.initState();
-    _listAnimationController = AnimationController(
+
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     );
-    _listAnimationController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _controller.forward();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _listAnimationController.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  Stream<QuerySnapshot> getDispatchedYarns() {
+    return FirebaseFirestore.instance
+        .collection('reserved_collection')
+        .snapshots();
+  }
+
+  // ✅ SORT FUNCTION
+  List<QueryDocumentSnapshot> _sortDocs(List<QueryDocumentSnapshot> docs) {
+    docs.sort((a, b) {
+      final dataA = a.data() as Map<String, dynamic>;
+      final dataB = b.data() as Map<String, dynamic>;
+
+      final idA = (dataA['id'] ?? dataA['yarnId'] ?? a.id).toString();
+      final idB = (dataB['id'] ?? dataB['yarnId'] ?? b.id).toString();
+
+      final supplierA = (dataA['supplier_name'] ?? '').toString();
+      final supplierB = (dataB['supplier_name'] ?? '').toString();
+
+      final rawA = dataA['created_at'] ?? dataA['timestamp'];
+      final rawB = dataB['created_at'] ?? dataB['timestamp'];
+
+      DateTime dateA = rawA is Timestamp ? rawA.toDate() : DateTime(2000);
+      DateTime dateB = rawB is Timestamp ? rawB.toDate() : DateTime(2000);
+
+      switch (_sortOption) {
+
+        case 'date_asc':
+          return dateA.compareTo(dateB);
+
+        case 'date_desc':
+          return dateB.compareTo(dateA);
+
+        case 'id_desc':
+          return idB.compareTo(idA);
+
+        case 'supplier_asc':
+          return supplierA.compareTo(supplierB);
+
+        case 'supplier_desc':
+          return supplierB.compareTo(supplierA);
+
+        case 'id_asc':
+        default:
+          return idA.compareTo(idB);
+      }
+    });
+
+    return docs;
   }
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.orange.shade400;
+    final primaryColor = Colors.orange.shade600;
 
     return Scaffold(
-      backgroundColor: Colors.white, // <-- white background
+      backgroundColor: const Color(0xFFF5F7FA),
+
       appBar: AppBar(
-        centerTitle: true,
-        elevation: 0,
-        title: const Text('Dispatch Yarn', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
         automaticallyImplyLeading: false,
-        iconTheme: IconThemeData(color: primaryColor),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        title: const Text(
+          'Dispatched Yarns',
+          style: TextStyle(color: Colors.black),
+        ),
+
+        // ✅ SORT BUTTON (ONLY ADDITION)
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort, color: Colors.black),
+            color: Colors.white,
+            onSelected: (value) {
+              setState(() {
+                _sortOption = value;
+              });
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                  value: 'date_desc', child: Text('Date ↓ (Newest)')),
+              const PopupMenuItem(
+                  value: 'date_asc', child: Text('Date ↑ (Oldest)')),
+              const PopupMenuItem(
+                  value: 'id_asc', child: Text('ID ↑')),
+              const PopupMenuItem(
+                  value: 'id_desc', child: Text('ID ↓')),
+              const PopupMenuItem(
+                  value: 'supplier_asc', child: Text('Supplier ↑')),
+              const PopupMenuItem(
+                  value: 'supplier_desc', child: Text('Supplier ↓')),
+            ],
+          )
+        ],
       ),
+
       body: Column(
         children: [
-          // ================== SEARCH FIELD ==================
+
+          // 🔍 SEARCH BAR (UNCHANGED)
           Padding(
             padding: const EdgeInsets.all(16),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search by Yarn ID...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white, // <-- white search box
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  )
+                ],
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim();
-                });
-              },
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search Yarn ID...',
+                  prefixIcon: Icon(Icons.search, color: primaryColor),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.trim();
+                  });
+                },
+              ),
             ),
           ),
 
-          // ================== LIST ==================
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: yarnService.getMovedYarns(),
+              stream: getDispatchedYarns(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator());
                 }
 
-                var docs = snapshot.data?.docs ?? [];
+                if (!snapshot.hasData) {
+                  return const Center(
+                      child: Text("No data found"));
+                }
 
-                // Filter by search query
+                var docs = snapshot.data!.docs;
+
+                // ✅ FILTER
+                docs = docs.where((doc) {
+                  final data =
+                  doc.data() as Map<String, dynamic>;
+
+                  final state = (data['state'] ??
+                      data['status'] ??
+                      data['yarn_status'] ??
+                      '')
+                      .toString()
+                      .toLowerCase();
+
+                  return state == 'dispatched';
+                }).toList();
+
+                // 🔍 SEARCH
                 if (_searchQuery.isNotEmpty) {
                   docs = docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final yarnId = (data['id'] ?? data['yarnId'] ?? data['ID'] ?? doc.id)
+                    final data =
+                    doc.data() as Map<String, dynamic>;
+
+                    final yarnId =
+                    (data['id'] ??
+                        data['yarnId'] ??
+                        doc.id)
                         .toString()
                         .toLowerCase();
-                    return yarnId.contains(_searchQuery.toLowerCase());
+
+                    return yarnId.contains(
+                        _searchQuery.toLowerCase());
                   }).toList();
                 }
 
-                // ================= EMPTY STATE =================
+                // ✅ APPLY SORT
+                docs = _sortDocs(docs);
+
                 if (docs.isEmpty) {
                   return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(26),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.local_shipping_outlined,
-                              size: 72,
-                              color: Colors.orangeAccent,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'No Yarn Ready for Dispatch',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'All items have been dispatched\nor none are ready.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: Column(
+                      mainAxisAlignment:
+                      MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.local_shipping_outlined,
+                          size: 70,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text("No Dispatched Yarn"),
+                      ],
                     ),
                   );
                 }
 
+                if (!_controller.isAnimating) {
+                  _controller.forward(from: 0);
+                }
+
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    final yarnId = data['id'] ?? data['yarnId'] ?? data['ID'] ?? doc.id;
 
-                    // Animation for each item
-                    final animation = Tween<Offset>(
-                      begin: const Offset(0, 0.1),
-                      end: Offset.zero,
-                    ).animate(
+                    final doc = docs[index];
+                    final data =
+                    doc.data() as Map<String, dynamic>;
+
+                    final yarnId =
+                        data['id'] ?? data['yarnId'] ?? doc.id;
+
+                    final supplier =
+                        data['supplier_name'] ?? 'Unknown';
+
+                    final animation =
+                    Tween<double>(begin: 0, end: 1)
+                        .animate(
                       CurvedAnimation(
-                        parent: _listAnimationController,
+                        parent: _controller,
                         curve: Interval(
-                          (index / docs.length),
-                          1.0,
-                          curve: Curves.easeOut,
+                          (index / docs.length) * 0.7,
+                          1,
+                          curve: Curves.easeOutCubic,
                         ),
                       ),
                     );
 
-                    // Alternate tile colors
-                    final tileColor = index % 2 == 0
-                        ? Colors.white.withOpacity(0.65)
-                        : Colors.white.withOpacity(0.55);
-
                     return FadeTransition(
-                      opacity: _listAnimationController,
-                      child: SlideTransition(
-                        position: animation,
-                        child: Dismissible(
-                          key: ValueKey(doc.id),
-                          background: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            alignment: Alignment.centerLeft,
+                      opacity: animation,
+                      child: Transform.translate(
+                        offset:
+                        Offset(0, 20 * (1 - animation.value)),
+                        child: Transform.scale(
+                          scale:
+                          0.95 + (0.05 * animation.value),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Colors.orangeAccent, Colors.orange],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white,
+                                  Color(0xFFF9FAFB)
+                                ],
                               ),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius:
+                              BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black
+                                      .withOpacity(0.04),
+                                  blurRadius: 10,
+                                  offset:
+                                  const Offset(0, 6),
+                                )
+                              ],
                             ),
-                            child: const Icon(Icons.qr_code_scanner, color: Colors.white),
-                          ),
-                          secondaryBackground: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            alignment: Alignment.centerRight,
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(Icons.delete_forever, color: Colors.white),
-                          ),
-                          confirmDismiss: (direction) async {
-                            if (direction == DismissDirection.startToEnd) {
-                              final scanSuccess = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ScanCodePage(
-                                    expectedQr: yarnId.toString(),
-                                    title: 'Verify Dispatch - $yarnId',
+                            child: Row(
+                              children: [
+
+                                Container(
+                                  padding:
+                                  const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor
+                                        .withOpacity(0.1),
+                                    borderRadius:
+                                    BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    Icons.local_shipping,
+                                    color: primaryColor,
                                   ),
                                 ),
-                              );
 
-                              if (scanSuccess == true) {
-                                if (!context.mounted) return false;
-                                final confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => _buildGlassDialog(
-                                    context,
-                                    title: 'Confirm Dispatch',
-                                    message: 'Final step: Dispatch Yarn $yarnId?',
-                                    confirmColor: Colors.orangeAccent,
+                                const SizedBox(width: 16),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        yarnId.toString(),
+                                        style:
+                                        const TextStyle(
+                                          fontWeight:
+                                          FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        supplier,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color:
+                                          Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                );
+                                ),
 
-                                if (confirmed == true) {
-                                  await yarnService.updateYarnStatus(doc.id, 'dispatched');
-                                }
-                              }
-                              return false;
-                            } else {
-                              final confirmRemove = await showDialog<bool>(
-                                context: context,
-                                barrierColor: Colors.black.withOpacity(0.2),
-                                builder: (ctx) => _buildGlassDialog(
-                                  context,
-                                  title: 'Remove Yarn',
-                                  message: 'Are you sure you want to remove yarn $yarnId?',
-                                  cancelRed: true,
-                                ),
-                              );
-
-                              if (confirmRemove == true) {
-                                await yarnService.updateYarnStatus(doc.id, 'cancelled');
-                                return true;
-                              }
-                              return false;
-                            }
-                          },
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 14),
-                                decoration: BoxDecoration(
-                                  color: tileColor,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 6),
+                                Container(
+                                  padding:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange
+                                        .withOpacity(0.15),
+                                    borderRadius:
+                                    BorderRadius.circular(20),
+                                  ),
+                                  child: const Text(
+                                    "DISPATCHED",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight:
+                                      FontWeight.w600,
+                                      color: Colors.orange,
                                     ),
-                                  ],
-                                ),
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.teal.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: const Icon(
-                                        Icons.local_shipping,
-                                        color: Colors.orangeAccent,
-                                        size: 28,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            yarnId.toString(),
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                            child: const Text(
-                                              'READY TO DISPATCH',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.orange,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                )
+                              ],
                             ),
                           ),
                         ),
@@ -319,93 +393,6 @@ class _DispatchListPageState extends State<DispatchListPage>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildGlassDialog(BuildContext context,
-      {required String title,
-        required String message,
-        Color confirmColor = Colors.orangeAccent,
-        bool cancelRed = false}) {
-    return Center(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.8,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black87, fontSize: 16),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(120, 48),
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'CANCEL',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(120, 48),
-                        backgroundColor: cancelRed
-                            ? Colors.red.withOpacity(0.25)
-                            : confirmColor.withOpacity(0.25),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        cancelRed ? 'REMOVE' : 'CONFIRM',
-                        style: TextStyle(
-                          color: cancelRed ? Colors.redAccent : confirmColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

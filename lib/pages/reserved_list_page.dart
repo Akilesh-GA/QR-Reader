@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/yarn_service.dart';
 import './qr_code.dart';
+import './reserved_yarn_details_page.dart';
 
 class ReservedListPage extends StatefulWidget {
   const ReservedListPage({super.key});
@@ -14,23 +15,56 @@ class ReservedListPage extends StatefulWidget {
 class _ReservedListPageState extends State<ReservedListPage>
     with SingleTickerProviderStateMixin {
   final YarnService yarnService = YarnService();
-  late AnimationController _listAnimationController;
+
+  late AnimationController _controller;
+
   String _searchQuery = '';
+
+  // ✅ SORT VARIABLE
+  String _sortOption = 'id_asc';
 
   @override
   void initState() {
     super.initState();
-    _listAnimationController = AnimationController(
+
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600), // smoother
     );
-    _listAnimationController.forward();
   }
 
   @override
   void dispose() {
-    _listAnimationController.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  // ✅ SMART SORT FUNCTION (clean + fast)
+  List<QueryDocumentSnapshot> _sortDocs(List<QueryDocumentSnapshot> docs) {
+    docs.sort((a, b) {
+      final dataA = a.data() as Map<String, dynamic>;
+      final dataB = b.data() as Map<String, dynamic>;
+
+      final idA = (dataA['id'] ?? dataA['yarnId'] ?? a.id).toString();
+      final idB = (dataB['id'] ?? dataB['yarnId'] ?? b.id).toString();
+
+      final supplierA = (dataA['supplier_name'] ?? '').toString();
+      final supplierB = (dataB['supplier_name'] ?? '').toString();
+
+      switch (_sortOption) {
+        case 'id_desc':
+          return idB.compareTo(idA);
+        case 'supplier_asc':
+          return supplierA.compareTo(supplierB);
+        case 'supplier_desc':
+          return supplierB.compareTo(supplierA);
+        case 'id_asc':
+        default:
+          return idA.compareTo(idB);
+      }
+    });
+
+    return docs;
   }
 
   @override
@@ -38,411 +72,471 @@ class _ReservedListPageState extends State<ReservedListPage>
     final primaryColor = Colors.green.shade700;
 
     return Scaffold(
-        backgroundColor: Colors.white, // Scaffold background
-        appBar: AppBar(
-          elevation: 1,
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Reserved Yarns',
-            style: TextStyle(color: Colors.black),
+      backgroundColor: const Color(0xFFF5F7FA),
+
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Reserved Yarns',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
           ),
-          centerTitle: true,
-          automaticallyImplyLeading: false,
-          iconTheme: IconThemeData(color: primaryColor),
         ),
-        body: Container(
-          color: Colors.white, // Ensure full body background is white
-          child: Column(
-            children: [
-              // ================== SEARCH FIELD ==================
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search by Yarn ID...',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value.trim();
-                    });
-                  },
-                ),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort, color: Colors.black),
+            color: Colors.white,
+            onSelected: (value) {
+              setState(() {
+                _sortOption = value;
+              });
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                  value: 'date_desc', child: Text('Date ↓ (Newest)')),
+              const PopupMenuItem(
+                  value: 'date_asc', child: Text('Date ↑ (Oldest)')),
+              const PopupMenuItem(
+                  value: 'id_asc', child: Text('ID ↑')),
+              const PopupMenuItem(
+                  value: 'id_desc', child: Text('ID ↓')),
+              const PopupMenuItem(
+                  value: 'supplier_asc', child: Text('Supplier ↑')),
+              const PopupMenuItem(
+                  value: 'supplier_desc', child: Text('Supplier ↓')),
+            ],
+          )
+        ],
+        centerTitle: true,
+      ),
+
+      body: Column(
+        children: [
+          // 🔍 SEARCH BAR
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  )
+                ],
               ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search Yarn ID...',
+                  prefixIcon: Icon(Icons.search, color: primaryColor),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.trim();
+                  });
+                },
+              ),
+            ),
+          ),
+          // 📦 LIST
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: yarnService.getReservedYarns(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                      child: CircularProgressIndicator());
+                }
 
-              // ================== LIST ==================
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: yarnService.getReservedYarns(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                var docs = snapshot.data!.docs;
 
-                    var docs = snapshot.data?.docs ?? [];
+                // 🔍 FILTER
+                if (_searchQuery.isNotEmpty) {
+                  docs = docs.where((doc) {
+                    final data =
+                    doc.data() as Map<String, dynamic>;
+                    final yarnId =
+                    (data['id'] ?? data['yarnId'] ?? doc.id)
+                        .toString()
+                        .toLowerCase();
+                    return yarnId
+                        .contains(_searchQuery.toLowerCase());
+                  }).toList();
+                }
 
-                    // Filter by search query
-                    if (_searchQuery.isNotEmpty) {
-                      docs = docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final yarnId =
-                        (data['id'] ?? data['yarnId'] ?? data['ID'] ?? doc.id)
-                            .toString()
-                            .toLowerCase();
-                        return yarnId.contains(_searchQuery.toLowerCase());
-                      }).toList();
-                    }
+                // ✅ SORT
+                docs = _sortDocs(docs);
 
-                    if (docs.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(26),
-                                decoration: BoxDecoration(
-                                  color: primaryColor.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: 72,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              const Text(
-                                'No Reserved Yarn Found',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'No matching items found.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+                // ❌ EMPTY
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment:
+                      MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inventory_2_outlined,
+                            size: 70,
+                            color: Colors.grey.shade400),
+                        const SizedBox(height: 10),
+                        const Text("No Reserved Yarn"),
+                      ],
+                    ),
+                  );
+                }
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
-                        final yarnId = data['id'] ??
-                            data['yarnId'] ??
-                            data['ID'] ??
-                            doc.id;
+                // 🔥 RESET ANIMATION EACH BUILD
+                _controller.forward(from: 0);
 
-                        // Animation for each item
-                        final animation = Tween<Offset>(
-                          begin: const Offset(0, 0.1),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: _listAnimationController,
-                            curve: Interval(
-                              (index / docs.length),
-                              1.0,
-                              curve: Curves.easeOut,
-                            ),
-                          ),
-                        );
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data =
+                    doc.data() as Map<String, dynamic>;
 
-                        // Alternate tile colors for differentiation
-                        final tileColor = index % 2 == 0
-                            ? Colors.white.withOpacity(0.65)
-                            : Colors.white.withOpacity(0.55);
+                    final yarnId =
+                        data['id'] ?? data['yarnId'] ?? doc.id;
 
-                        return FadeTransition(
-                          opacity: _listAnimationController,
-                          child: SlideTransition(
-                            position: animation,
-                            child: Dismissible(
-                              key: ValueKey(doc.id),
-                              background: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                alignment: Alignment.centerLeft,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Colors.greenAccent, Colors.green],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                    final supplier =
+                        data['supplier_name'] ?? 'Unknown';
+
+                    // 🔥 SMOOTH STAGGER ANIMATION
+                    final animation = Tween<double>(begin: 0, end: 1)
+                        .animate(CurvedAnimation(
+                      parent: _controller,
+                      curve: Interval(
+                        (index / docs.length) * 0.7,
+                        1,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ));
+
+                    return FadeTransition(
+                      opacity: animation,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - animation.value)),
+                        child: Transform.scale(
+                          scale: 0.95 + (0.05 * animation.value),
+                          child: Dismissible(
+                            key: ValueKey(doc.id),
+                            background: _swipeLeft(),
+                            secondaryBackground: _swipeRight(),
+                            confirmDismiss:
+                                (direction) async {
+                              if (direction ==
+                                  DismissDirection.startToEnd) {
+                                final scan =
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ScanCodePage(
+                                      expectedQr:
+                                      supplier.toString(),
+                                      title: 'Verify - $yarnId',
+                                    ),
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: const Icon(
-                                  Icons.qr_code_scanner,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              secondaryBackground: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                alignment: Alignment.centerRight,
+                                );
+
+                                if (scan == true) {
+                                  await yarnService
+                                      .updateYarnStatus(
+                                      doc.id, 'moved');
+                                }
+                                return false;
+                              } else {
+                                final confirm =
+                                await _deleteDialog(
+                                    yarnId);
+                                if (confirm == true) {
+                                  await yarnService
+                                      .deleteReservedYarnById(
+                                      doc.id);
+                                  return true;
+                                }
+                                return false;
+                              }
+                            },
+                            child: InkWell(
+                              borderRadius:
+                              BorderRadius.circular(16),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ReservedYarnDetailsPage(
+                                          docId: doc.id,
+                                          data: data,
+                                        ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(
+                                    bottom: 14),
+                                padding:
+                                const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent,
-                                  borderRadius: BorderRadius.circular(16),
+                                  gradient:
+                                  const LinearGradient(
+                                    colors: [
+                                      Colors.white,
+                                      Color(0xFFF9FAFB)
+                                    ],
+                                  ),
+                                  borderRadius:
+                                  BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black
+                                          .withOpacity(0.04),
+                                      blurRadius: 10,
+                                      offset:
+                                      const Offset(0, 6),
+                                    )
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.delete_forever,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              confirmDismiss: (direction) async {
-                                if (direction == DismissDirection.startToEnd) {
-                                  final scanSuccess = await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ScanCodePage(
-                                        expectedQr: yarnId.toString(),
-                                        title: 'Verify Move - $yarnId',
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding:
+                                      const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: primaryColor
+                                            .withOpacity(0.1),
+                                        borderRadius:
+                                        BorderRadius.circular(
+                                            12),
+                                      ),
+                                      child: Icon(
+                                        Icons.inventory_2,
+                                        color: primaryColor,
                                       ),
                                     ),
-                                  );
-
-                                  if (scanSuccess == true) {
-                                    if (!context.mounted) return false;
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        backgroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        title: const Text(
-                                          'Confirm Move',
-                                          style: TextStyle(color: Colors.greenAccent),
-                                        ),
-                                        content: Text('Move Yarn $yarnId to Floor?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('CANCEL'),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                        children: [
+                                          Text(
+                                            yarnId.toString(),
+                                            style:
+                                            const TextStyle(
+                                              fontWeight:
+                                              FontWeight.w600,
+                                            ),
                                           ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.greenAccent),
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            child: const Text('CONFIRM'),
+                                          const SizedBox(
+                                              height: 6),
+                                          Text(
+                                            supplier,
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors
+                                                    .grey[600]),
                                           ),
                                         ],
                                       ),
-                                    );
-
-                                    if (confirmed == true) {
-                                      await yarnService.updateYarnStatus(
-                                          doc.id, 'moved');
-                                    }
-                                  }
-                                  return false;
-                                } else {
-                                  final confirmRemove = await showDialog<bool>(
-                                    context: context,
-                                    barrierColor: Colors.black.withOpacity(0.2),
-                                    builder: (ctx) => Center(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: BackdropFilter(
-                                          filter: ImageFilter.blur(
-                                              sigmaX: 12, sigmaY: 12),
-                                          child: Container(
-                                            width: MediaQuery.of(context).size.width *
-                                                0.8,
-                                            padding: const EdgeInsets.all(20),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.3),
-                                              borderRadius: BorderRadius.circular(16),
-                                              border: Border.all(
-                                                  color: Colors.white.withOpacity(0.2)),
-                                            ),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  'Remove Yarn',
-                                                  style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                Text(
-                                                  'Are you sure you want to remove yarn $yarnId?',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                      color: Colors.black87,
-                                                      fontSize: 16),
-                                                ),
-                                                const SizedBox(height: 20),
-                                                Row(
-                                                  mainAxisAlignment:
-                                                  MainAxisAlignment.spaceEvenly,
-                                                  children: [
-                                                    // CANCEL button
-                                                    TextButton(
-                                                      onPressed: () =>
-                                                          Navigator.pop(ctx, false),
-                                                      style: TextButton.styleFrom(
-                                                        minimumSize:
-                                                        const Size(120, 48),
-                                                        backgroundColor: Colors.white
-                                                            .withOpacity(0.2),
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                          BorderRadius.circular(12),
-                                                        ),
-                                                      ),
-                                                      child: const Text(
-                                                        'CANCEL',
-                                                        style: TextStyle(
-                                                          color: Colors.black87,
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    // REMOVE button
-                                                    TextButton(
-                                                      onPressed: () =>
-                                                          Navigator.pop(ctx, true),
-                                                      style: TextButton.styleFrom(
-                                                        minimumSize:
-                                                        const Size(120, 48),
-                                                        backgroundColor: Colors.red
-                                                            .withOpacity(0.25),
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                          BorderRadius.circular(12),
-                                                        ),
-                                                      ),
-                                                      child: const Text(
-                                                        'REMOVE',
-                                                        style: TextStyle(
-                                                          color: Colors.redAccent,
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                )
-                                              ],
-                                            ),
-                                          ),
-                                        ),
+                                    ),
+                                    Container(
+                                      padding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green
+                                            .withOpacity(0.12),
+                                        borderRadius:
+                                        BorderRadius.circular(
+                                            20),
                                       ),
-                                    ),
-                                  );
-
-                                  await yarnService.deleteReservedYarnById(doc.id);
-                                  return true;
-                                }
-                              },
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 14),
-                                    decoration: BoxDecoration(
-                                      color: tileColor,
-                                      borderRadius: BorderRadius.circular(16),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.green.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          padding: const EdgeInsets.all(12),
-                                          child: const Icon(
-                                            Icons.inventory_2_outlined,
-                                            color: Colors.green,
-                                            size: 28,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                yarnId.toString(),
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 10, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.green.withOpacity(0.15),
-                                                  borderRadius:
-                                                  BorderRadius.circular(20),
-                                                ),
-                                                child: const Text(
-                                                  'RESERVED',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Colors.green,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                      child: const Text(
+                                        "RESERVED",
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight:
+                                            FontWeight.w600,
+                                            color:
+                                            Colors.green),
+                                      ),
+                                    )
+                                  ],
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     );
                   },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _swipeLeft() => Container(
+    alignment: Alignment.centerLeft,
+    padding:
+    const EdgeInsets.symmetric(horizontal: 20),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+          colors: [Colors.greenAccent, Colors.green]),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child:
+    const Icon(Icons.qr_code, color: Colors.white),
+  );
+
+  Widget _swipeRight() => Container(
+    alignment: Alignment.centerRight,
+    padding:
+    const EdgeInsets.symmetric(horizontal: 20),
+    decoration: BoxDecoration(
+      color: Colors.redAccent,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child:
+    const Icon(Icons.delete, color: Colors.white),
+  );
+
+  Future<bool?> _deleteDialog(dynamic yarnId) {
+    return showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        elevation: 10,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🔴 ICON
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.delete, color: Colors.red, size: 30),
+              ),
+
+              const SizedBox(height: 16),
+
+              // TITLE
+              const Text(
+                "Delete Yarn",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+
+              const SizedBox(height: 10),
+
+              // MESSAGE
+              Text(
+                "Delete yarn $yarnId permanently?",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // BUTTONS
+              Row(
+                children: [
+                  // ❌ CANCEL (TEXT ONLY)
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        overlayColor: Colors.transparent, // no ripple highlight
+                      ),
+                      child: const Text(
+                        "Cancel",
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // 🔥 DELETE BUTTON (RED GLOW)
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.6),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "Delete",
+                          style: TextStyle(
+                            color: Colors.white, // ✅ WHITE TEXT
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
             ],
           ),
         ),
-        );
-    }
+      ),
+    );
+  }
 }

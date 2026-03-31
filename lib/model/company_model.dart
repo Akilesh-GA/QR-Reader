@@ -9,5 +9,11 @@ class CompanyModel {
     required this.yarnDocs,
   });
 
-  int get count => yarnDocs.length;
+  int get count {
+    return yarnDocs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final state = (data['state'] ?? 'RESERVED').toString().toUpperCase();
+      return state == 'RESERVED';
+    }).length;
+  }
 }

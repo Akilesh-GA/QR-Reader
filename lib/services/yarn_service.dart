@@ -54,7 +54,7 @@ class YarnService {
   Stream<QuerySnapshot> getReservedYarns() {
     return _db
         .collection('reserved_collection')
-        .where('state', whereIn: ['reserved', 'RESERVED'])
+        .where('state', whereIn: ['reserved', 'RESERVED', 'scanned', 'SCANNED', 'verified', 'VERIFIED']) // keeping 'verified' for backward safety
         .snapshots();
   }
 
@@ -86,7 +86,17 @@ class YarnService {
     });
   }
 
-  /// ✅ Mark yarn as verified
+  /// ✅ Mark yarn as scanned state instead of verified
+  Future<void> markAsScannedState(String docId) async {
+    await _db.collection('reserved_collection').doc(docId).update({
+      'state': 'SCANNED',
+      'is_scanned': true,
+      'scanned_at': FieldValue.serverTimestamp(),
+      'last_state_change': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// ✅ Mark yarn as verified (Legacy)
   Future<void> markAsVerified(String docId) async {
     await _db.collection('reserved_collection').doc(docId).update({
       'state': 'VERIFIED',
@@ -101,7 +111,7 @@ class YarnService {
     final doc = await _db.collection('reserved_collection').doc(docId).get();
     if (!doc.exists) return false;
     final data = doc.data();
-    return (data?['is_scanned'] ?? false) || (data?['state'] == 'VERIFIED');
+    return (data?['is_scanned'] ?? false) || (data?['state'] == 'VERIFIED') || (data?['state'] == 'SCANNED');
   }
 
   /// 🔁 OPTIONAL: Reset scan (undo feature)

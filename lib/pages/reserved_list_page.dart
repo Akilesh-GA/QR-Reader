@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/yarn_service.dart';
 import './yarn_id_list_view.dart';
+import './company_list_view.dart';
 
 class ReservedListPage extends StatefulWidget {
   const ReservedListPage({super.key});
@@ -33,30 +34,38 @@ class _ReservedListPageState extends State<ReservedListPage> {
         ),
 
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.sort, color: Colors.black),
-            onSelected: (val) => setState(() => _sortOption = val),
-            itemBuilder: (_) {
-              if (_isCompanyView) {
-                return const [
-                  PopupMenuItem(value: 'name_asc', child: Text("Name ↑")),
-                  PopupMenuItem(value: 'name_desc', child: Text("Name ↓")),
-                  PopupMenuItem(value: 'count_asc', child: Text("Count ↑")),
-                  PopupMenuItem(value: 'count_desc', child: Text("Count ↓")),
-                  PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-                  PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-                ];
-              } else {
-                return const [
-                  PopupMenuItem(value: 'id_asc', child: Text("ID ↑")),
-                  PopupMenuItem(value: 'id_desc', child: Text("ID ↓")),
-                  PopupMenuItem(value: 'supplier_asc', child: Text("Supplier ↑")),
-                  PopupMenuItem(value: 'supplier_desc', child: Text("Supplier ↓")),
-                  PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-                  PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-                ];
-              }
-            },
+          Theme(
+            data: Theme.of(context).copyWith(
+              popupMenuTheme: const PopupMenuThemeData(
+                color: Colors.white, // background
+                textStyle: TextStyle(color: Colors.white),
+              ),
+            ),
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.sort, color: Colors.black),
+              onSelected: (val) => setState(() => _sortOption = val),
+              itemBuilder: (_) {
+                if (_isCompanyView) {
+                  return const [
+                    PopupMenuItem(value: 'name_asc', child: Text("Name ↑")),
+                    PopupMenuItem(value: 'name_desc', child: Text("Name ↓")),
+                    PopupMenuItem(value: 'count_asc', child: Text("Count ↑")),
+                    PopupMenuItem(value: 'count_desc', child: Text("Count ↓")),
+                    PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
+                    PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
+                  ];
+                } else {
+                  return const [
+                    PopupMenuItem(value: 'id_asc', child: Text("ID ↑")),
+                    PopupMenuItem(value: 'id_desc', child: Text("ID ↓")),
+                    PopupMenuItem(value: 'supplier_asc', child: Text("Supplier ↑")),
+                    PopupMenuItem(value: 'supplier_desc', child: Text("Supplier ↓")),
+                    PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
+                    PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
+                  ];
+                }
+              },
+            ),
           ),
         ],
       ),

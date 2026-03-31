@@ -70,6 +70,8 @@ class _ReservedYarnDetailsPageState
     final quality = widget.data['quality_grade'] ?? 'N/A';
     final bin = widget.data['bin'] ?? widget.data['bin_id'] ?? 'N/A';
     final rack = widget.data['rack_id'] ?? 'N/A';
+    final weight = widget.data['weight']?.toString() ?? widget.data['net_weight']?.toString() ?? 'N/A';
+    final orderId = widget.data['order_id'] ?? widget.data['orderId'] ?? 'N/A';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -110,7 +112,9 @@ class _ReservedYarnDetailsPageState
                         _row("Count", count),
                         _row("Quality", quality),
                         _row("Bin", bin),
-                        _row("Rack Bin", rack),
+                        _row("Rack", rack),
+                        _row("Weight", weight),
+                        _row("Order ID", orderId.toString()),
 
                         const SizedBox(height: 10),
                         Divider(color: Colors.grey.shade200),
@@ -136,19 +140,7 @@ class _ReservedYarnDetailsPageState
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    "More Details",
-                                    style: TextStyle(
-                                      color: primaryColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.arrow_forward_ios,
-                                    size: 14,
-                                    color: primaryColor,
-                                  ),
+                                  
                                 ],
                               ),
                             ),

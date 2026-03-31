@@ -5,8 +5,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VerifyQRPage extends StatefulWidget {
-  final String expectedQr; // expected QR (yarn ID)
-  final String yarnId; // yarn ID for title & verification
+  final String expectedQr;
+  final String yarnId;
 
   const VerifyQRPage({
     super.key,
@@ -35,11 +35,10 @@ class _VerifyQRPageState extends State<VerifyQRPage>
       returnImage: false,
     );
 
-    // Animation for scanning laser
     animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat(reverse: false);
+    )..repeat();
 
     laserAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: animationController, curve: Curves.linear),
@@ -51,7 +50,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
   void _startIdleTimer() {
     idleTimer?.cancel();
     idleTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted) Navigator.pop(context, false); // return false if idle
+      if (mounted) Navigator.pop(context, false);
     });
   }
 
@@ -63,11 +62,11 @@ class _VerifyQRPageState extends State<VerifyQRPage>
     super.dispose();
   }
 
-  /// ✅ Custom styled SnackBar (like YarnDataPage)
-  void _showAckSnackBar(String message) {
+  /// ✅ Common SnackBar Template
+  void _showAck(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
@@ -76,7 +75,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
         content: Row(
           children: [
             Image.asset(
-              'assets/icon/app_icon.png', // your app icon
+              'assets/icon/app_icon.png',
               height: 24,
               width: 24,
             ),
@@ -97,7 +96,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
     );
   }
 
-  // Firestore verification logic (update state, keep ID)
+  /// Firestore verification logic
   Future<void> _verifyAndUpdate(String qrId) async {
     try {
       final query = await FirebaseFirestore.instance
@@ -107,23 +106,21 @@ class _VerifyQRPageState extends State<VerifyQRPage>
           .get();
 
       if (query.docs.isEmpty) {
-        if (mounted) _showAckSnackBar('Yarn not found for scanned QR: $qrId');
+        if (mounted) _showAck('QR not found');
         return;
       }
 
       final doc = query.docs.first;
       final data = doc.data();
 
-      // Safe null-aware field access
       final state = (data['state'] ?? 'RESERVED').toString();
       final isAlreadyScanned = (data['is_scanned'] ?? false) as bool;
 
       if (state == 'VERIFIED' || isAlreadyScanned) {
-        if (mounted) _showAckSnackBar('Yarn already verified');
+        if (mounted) _showAck('Already scanned');
         return;
       }
 
-      // ✅ Update Firestore: keep the ID, mark as VERIFIED
       await doc.reference.update({
         'state': 'VERIFIED',
         'is_scanned': true,
@@ -131,13 +128,13 @@ class _VerifyQRPageState extends State<VerifyQRPage>
         'last_state_change': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) _showAckSnackBar('Yarn verified successfully');
+      if (mounted) _showAck('Scan successful');
     } catch (_) {
-      if (mounted) _showAckSnackBar('Yarn verification completed');
+      if (mounted) _showAck('Scan failed');
     }
   }
 
-  // Handle scanning barcode
+  /// Handle scanning
   void _handleScan(BarcodeCapture capture) async {
     if (!isScanning) return;
 
@@ -148,43 +145,34 @@ class _VerifyQRPageState extends State<VerifyQRPage>
 
     String scannedId = rawValue.trim();
 
-    // Parse JSON if QR contains JSON
     try {
       final decoded = json.decode(rawValue);
       if (decoded is Map && decoded.containsKey('id')) {
         scannedId = decoded['id'].toString().trim();
       }
-    } catch (_) {
-      // Not JSON, leave as rawValue
-    }
+    } catch (_) {}
 
     final expectedId = widget.expectedQr.trim();
 
     if (scannedId != expectedId) {
-      _showAckSnackBar(
-        'QR does not match expected Yarn ID\nScanned: $scannedId\nExpected: $expectedId',
-      );
+      _showAck('Invalid QR');
       _startIdleTimer();
       return;
     }
 
-    // ✅ Stop scanning to prevent duplicates
     setState(() {
       isScanning = false;
     });
     controller?.stop();
 
-    // Show acknowledgment
-    _showAckSnackBar('QR matched! Verifying...');
+    _showAck('Verifying...');
 
-    // Update Firestore: mark verified
     await _verifyAndUpdate(scannedId);
 
-    // Return to previous page
     if (mounted) Navigator.pop(context, true);
   }
 
-  /// ✅ Left swipe update logic: mark verified without deleting ID
+  /// Swipe verification
   Future<void> updateOnLeftSwipe(String qrId) async {
     try {
       final query = await FirebaseFirestore.instance
@@ -193,7 +181,10 @@ class _VerifyQRPageState extends State<VerifyQRPage>
           .limit(1)
           .get();
 
-      if (query.docs.isEmpty) return;
+      if (query.docs.isEmpty) {
+        _showAck('QR not found');
+        return;
+      }
 
       final doc = query.docs.first;
       final data = doc.data();
@@ -202,7 +193,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
       final isAlreadyScanned = (data['is_scanned'] ?? false) as bool;
 
       if (state == 'VERIFIED' || isAlreadyScanned) {
-        _showAckSnackBar('Yarn already verified');
+        _showAck('Already scanned');
         return;
       }
 
@@ -213,9 +204,9 @@ class _VerifyQRPageState extends State<VerifyQRPage>
         'last_state_change': FieldValue.serverTimestamp(),
       });
 
-      _showAckSnackBar('Yarn verified successfully via swipe');
+      _showAck('Scan successful');
     } catch (_) {
-      _showAckSnackBar('Yarn verification completed');
+      _showAck('Scan failed');
     }
   }
 
@@ -226,10 +217,6 @@ class _VerifyQRPageState extends State<VerifyQRPage>
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Verify - ${widget.yarnId}'),
-        backgroundColor: Colors.green,
-      ),
       body: Stack(
         children: [
           MobileScanner(

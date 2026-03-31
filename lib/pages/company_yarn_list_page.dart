@@ -181,7 +181,7 @@ class _CompanyYarnListPageState extends State<CompanyYarnListPage>
                     if (direction == DismissDirection.startToEnd) {
                       if (isVerified || isScanned) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Already Verified")),
+                          const SnackBar(content: Text("Already Scanned")),
                         );
                         return false;
                       }
@@ -191,7 +191,7 @@ class _CompanyYarnListPageState extends State<CompanyYarnListPage>
 
                       if (alreadyScanned) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Already Verified")),
+                          const SnackBar(content: Text("Already Scanned")),
                         );
                         return false;
                       }
@@ -212,7 +212,7 @@ class _CompanyYarnListPageState extends State<CompanyYarnListPage>
                         });
 
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Verified Successfully")),
+                          const SnackBar(content: Text("Scanned Successfully")),
                         );
                       }
 
@@ -268,14 +268,14 @@ class _CompanyYarnListPageState extends State<CompanyYarnListPage>
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isVerified
+                                color: (isVerified || isScanned)
                                     ? Colors.blue.withOpacity(0.1)
                                     : primaryColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
                                 Icons.inventory_2,
-                                color: isVerified ? Colors.blue : primaryColor,
+                                color: (isVerified || isScanned) ? Colors.blue : primaryColor,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -302,17 +302,17 @@ class _CompanyYarnListPageState extends State<CompanyYarnListPage>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: isVerified
+                                color: (isVerified || isScanned)
                                     ? Colors.blue.withOpacity(0.15)
                                     : Colors.grey.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                isVerified ? "VERIFIED" : "RESERVED",
+                                (isVerified || isScanned) ? "SCANNED" : "RESERVED",
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: isVerified ? Colors.blue : Colors.green,
+                                  color: (isVerified || isScanned) ? Colors.blue : Colors.green,
                                 ),
                               ),
                             )

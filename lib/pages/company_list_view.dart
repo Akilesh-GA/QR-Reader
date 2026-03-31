@@ -1,374 +1,179 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/yarn_service.dart';
-import './reserved_yarn_details_page.dart';
-import './verify_qr_page.dart';
+import './company_yarn_list_page.dart';
 
-class CompanyYarnListPage extends StatefulWidget {
-  final String companyName;
+class CompanyListView extends StatefulWidget {
   final List<QueryDocumentSnapshot> docs;
+  final String searchQuery;
+  final String sortOption;
+  final bool showIconBackground;
 
-  const CompanyYarnListPage({
+  const CompanyListView({
     super.key,
-    required this.companyName,
     required this.docs,
+    required this.searchQuery,
+    required this.sortOption,
+    this.showIconBackground = false,
   });
 
   @override
-  State<CompanyYarnListPage> createState() => _CompanyYarnListPageState();
+  State<CompanyListView> createState() => _CompanyListViewState();
 }
 
-class _CompanyYarnListPageState extends State<CompanyYarnListPage>
-    with SingleTickerProviderStateMixin {
-  final YarnService yarnService = YarnService();
-  late AnimationController _controller;
-
-  String? _ackMessage;
-
-  // ✅ LOCAL STATE
-  final Map<String, bool> _localScanState = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  // ✅ DELETE CONFIRM
-  Future<bool> _confirmDelete(BuildContext context, String yarnId) async {
-    final controller = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Confirm Delete",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-
-              const SizedBox(height: 12),
-
-              Text("Yarn ID: $yarnId"),
-
-              const SizedBox(height: 12),
-
-              TextField(
-                controller: controller,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(
-                  hintText: "Type Yarn ID",
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("Cancel"),
-                    ),
-                  ),
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () {
-                        if (controller.text.trim() == yarnId) {
-                          Navigator.pop(context, true);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text("ID does not match")),
-                          );
-                        }
-                      },
-                      child: const Text("Delete"),
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-
-    return result ?? false;
-  }
-
+class _CompanyListViewState extends State<CompanyListView> {
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.green;
+    // 1. Group by Supplier
+    Map<String, List<QueryDocumentSnapshot>> companyMap = {};
+    for (var doc in widget.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final supplier = data['supplier_name'] ?? 'Unknown';
+      if (!companyMap.containsKey(supplier)) {
+        companyMap[supplier] = [];
+      }
+      companyMap[supplier]!.add(doc);
+    }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: Text(widget.companyName),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+    // 2. Filter by search query
+    final query = widget.searchQuery.toLowerCase();
+    final companyStats = companyMap.entries.where((entry) {
+      return entry.key.toLowerCase().contains(query);
+    }).map((entry) {
+      final name = entry.key;
+      final tempDocs = entry.value;
 
-      body: Stack(
-        children: [
-          ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: widget.docs.length,
-            itemBuilder: (context, index) {
+      int unverifiedCount = 0;
+      DateTime maxDate = DateTime(2000);
 
-              final doc = widget.docs[index];
-              final data = doc.data() as Map<String, dynamic>;
+      for (var d in tempDocs) {
+        final data = d.data() as Map<String, dynamic>;
 
-              final yarnId = data['id'] ?? doc.id;
-              final supplier = data['supplier_name'] ?? 'Unknown';
+        final state = data['state'] ?? 'RESERVED';
+        final isVerified = state == 'VERIFIED';
+        final isScanned = data['is_scanned'] ?? false;
 
-              final state = data['state'] ?? 'RESERVED';
+        if (!isVerified && !isScanned) {
+          unverifiedCount++;
+        }
 
-              final isVerified = state == 'VERIFIED';
+        final rawDate = data['updatedAt'];
+        DateTime dDate = rawDate is Timestamp ? rawDate.toDate() : DateTime(2000);
+        if (dDate.isAfter(maxDate)) {
+          maxDate = dDate;
+        }
+      }
 
-              final isScanned = isVerified
-                  ? true
-                  : _localScanState[doc.id] ??
-                  (data['is_scanned'] ?? false);
+      return {
+        'name': name,
+        'docs': tempDocs,
+        'unverifiedCount': unverifiedCount,
+        'latestDate': maxDate,
+      };
+    }).toList();
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
+    // 3. Sort
+    companyStats.sort((a, b) {
+      String nameA = a['name'] as String;
+      String nameB = b['name'] as String;
+      int sumA = a['unverifiedCount'] as int;
+      int sumB = b['unverifiedCount'] as int;
+      DateTime dateA = a['latestDate'] as DateTime;
+      DateTime dateB = b['latestDate'] as DateTime;
 
-                child: Dismissible(
-                  key: ValueKey(doc.id),
+      switch (widget.sortOption) {
+        case 'name_desc':
+          return nameB.compareTo(nameA);
+        case 'count_asc':
+          return sumA.compareTo(sumB);
+        case 'count_desc':
+          return sumB.compareTo(sumA);
+        case 'date_asc':
+          return dateA.compareTo(dateB);
+        case 'date_desc':
+          return dateB.compareTo(dateA);
+        case 'name_asc':
+        default:
+          return nameA.compareTo(nameB);
+      }
+    });
 
-                  background: _swipeLeft(),
-                  secondaryBackground: _swipeRight(),
+    if (companyStats.isEmpty) {
+      return const Center(child: Text("No Data"));
+    }
 
-                  confirmDismiss: (direction) async {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: companyStats.length,
+      itemBuilder: (_, index) {
+        final comp = companyStats[index];
+        final String companyName = comp['name'] as String;
+        final int unverifiedCount = comp['unverifiedCount'] as int;
+        final List<QueryDocumentSnapshot> compDocs = comp['docs'] as List<QueryDocumentSnapshot>;
 
-                    // ✅ LEFT SWIPE → SCAN / VERIFY
-                    if (direction == DismissDirection.startToEnd) {
-
-                      // 🚫 BLOCK IF ALREADY SCANNED / VERIFIED
-                      if (isScanned || isVerified) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Already Verified")),
-                        );
-                        return false;
-                      }
-
-                      final alreadyScanned =
-                      await yarnService.isAlreadyScanned(doc.id);
-
-                      if (alreadyScanned) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Already Verified")),
-                        );
-                        return false;
-                      }
-
-                      // 👉 OPEN QR PAGE
-                      final result = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VerifyQRPage(
-                            expectedQr: yarnId.toString(),
-                            yarnId: yarnId.toString(),
-                          ),
-                        ),
-                      );
-
-                      if (result == true) {
-                        await yarnService.markAsVerified(doc.id);
-
-                        setState(() {
-                          _localScanState[doc.id] = true;
-                          _ackMessage = "Verified $yarnId";
-                        });
-                      }
-
-                      return false;
-                    }
-
-                    // ✅ RIGHT SWIPE → DELETE
-                    else {
-                      final confirm =
-                      await _confirmDelete(context, yarnId.toString());
-
-                      if (confirm) {
-                        await yarnService.deleteReservedYarnById(doc.id);
-
-                        setState(() {
-                          widget.docs.removeAt(index); // ✅ REMOVE LOCALLY
-                          _ackMessage = "Deleted $yarnId";
-                        });
-                      }
-
-                      return false;
-                    }
-                  },
-
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ReservedYarnDetailsPage(
-                            docId: doc.id,
-                            data: data,
-                          ),
-                        ),
-                      );
-                    },
-
-                    child: Opacity(
-                      opacity: isScanned ? 0.6 : 1,
-
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-
-                          border: isScanned
-                              ? Border.all(color: Colors.blue)
-                              : null,
-
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            )
-                          ],
-                        ),
-
-                        child: Row(
-                          children: [
-
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isVerified
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : primaryColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.inventory_2,
-                                color: isVerified
-                                    ? Colors.blue
-                                    : primaryColor,
-                              ),
-                            ),
-
-                            const SizedBox(width: 16),
-
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    yarnId.toString(),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    supplier,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600]),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: isVerified
-                                    ? Colors.blue.withOpacity(0.15)
-                                    : Colors.green.withOpacity(0.15),
-                                borderRadius:
-                                BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                isVerified ? "VERIFIED" : "RESERVED",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isVerified
-                                      ? Colors.blue
-                                      : Colors.green,
-                                ),
-                              ),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CompanyYarnListPage(
+                    companyName: companyName,
+                    docs: compDocs,
                   ),
                 ),
               );
             },
-          ),
-
-          // ✅ ACK MESSAGE
-          if (_ackMessage != null)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(_ackMessage!),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Colors.white, Color(0xFFF9FAFB)],
                 ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  )
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.business, color: Colors.green),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          companyName,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "$unverifiedCount reserved",
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        )
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
               ),
             ),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
-
-  Widget _swipeLeft() => Container(
-    alignment: Alignment.centerLeft,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-          colors: [Colors.green, Colors.greenAccent]),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: const Icon(Icons.qr_code, color: Colors.white),
-  );
-
-  Widget _swipeRight() => Container(
-    alignment: Alignment.centerRight,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    decoration: BoxDecoration(
-      color: Colors.redAccent,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: const Icon(Icons.delete, color: Colors.white),
-  );
 }

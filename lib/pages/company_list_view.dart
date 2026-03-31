@@ -1,213 +1,374 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../utils/group_by_company.dart';
-import './company_yarn_list_page.dart';
-import '../model/company_model.dart';
+import '../services/yarn_service.dart';
+import './reserved_yarn_details_page.dart';
+import './verify_qr_page.dart';
 
-class CompanyListView extends StatefulWidget {
+class CompanyYarnListPage extends StatefulWidget {
+  final String companyName;
   final List<QueryDocumentSnapshot> docs;
-  final String searchQuery;
-  final bool showIconBackground;
 
-  const CompanyListView({
+  const CompanyYarnListPage({
     super.key,
+    required this.companyName,
     required this.docs,
-    required this.searchQuery,
-    this.showIconBackground = true,
   });
 
   @override
-  State<CompanyListView> createState() => _CompanyListViewState();
+  State<CompanyYarnListPage> createState() => _CompanyYarnListPageState();
 }
 
-class _CompanyListViewState extends State<CompanyListView> {
+class _CompanyYarnListPageState extends State<CompanyYarnListPage>
+    with SingleTickerProviderStateMixin {
+  final YarnService yarnService = YarnService();
+  late AnimationController _controller;
 
-  String _sortOption = 'name_asc';
+  String? _ackMessage;
 
-  // ✅ SORT FUNCTION (FIX: USE COPY TO TRIGGER UI UPDATE)
-  List<CompanyModel> _sortCompanies(List<CompanyModel> companies) {
+  // ✅ LOCAL STATE
+  final Map<String, bool> _localScanState = {};
 
-    List<CompanyModel> sortedList = List.from(companies); // 🔥 IMPORTANT FIX
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+  }
 
-    sortedList.sort((a, b) {
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
-      DateTime getLatestDate(CompanyModel c) {
-        DateTime latest = DateTime(2000);
+  // ✅ DELETE CONFIRM
+  Future<bool> _confirmDelete(BuildContext context, String yarnId) async {
+    final controller = TextEditingController();
 
-        for (var doc in c.yarnDocs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final raw = data['created_at'] ?? data['timestamp'];
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Confirm Delete",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
 
-          if (raw is Timestamp) {
-            final date = raw.toDate();
-            if (date.isAfter(latest)) {
-              latest = date;
-            }
-          }
-        }
-        return latest;
-      }
+              const SizedBox(height: 12),
 
-      switch (_sortOption) {
-        case 'date_desc':
-          return getLatestDate(b).compareTo(getLatestDate(a));
+              Text("Yarn ID: $yarnId"),
 
-        case 'date_asc':
-          return getLatestDate(a).compareTo(getLatestDate(b));
+              const SizedBox(height: 12),
 
-        case 'name_desc':
-          return b.name.toLowerCase().compareTo(a.name.toLowerCase());
+              TextField(
+                controller: controller,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  hintText: "Type Yarn ID",
+                ),
+              ),
 
-        case 'count_asc':
-          return a.count.compareTo(b.count);
+              const SizedBox(height: 16),
 
-        case 'count_desc':
-          return b.count.compareTo(a.count);
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("Cancel"),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () {
+                        if (controller.text.trim() == yarnId) {
+                          Navigator.pop(context, true);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("ID does not match")),
+                          );
+                        }
+                      },
+                      child: const Text("Delete"),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
 
-        case 'name_asc':
-        default:
-          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      }
-    });
-
-    return sortedList; // ✅ RETURN NEW LIST
+    return result ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.green.shade700;
+    final primaryColor = Colors.green;
 
-    var companies = groupByCompany(widget.docs)
-        .where((c) =>
-        c.name.toLowerCase().contains(widget.searchQuery.toLowerCase()))
-        .toList();
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        title: Text(widget.companyName),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
 
-    // ✅ APPLY SORT (WORKS CORRECTLY NOW)
-    companies = _sortCompanies(companies);
+      body: Stack(
+        children: [
+          ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: widget.docs.length,
+            itemBuilder: (context, index) {
 
-    if (companies.isEmpty) {
-      return const Center(child: Text("No Companies Found"));
-    }
+              final doc = widget.docs[index];
+              final data = doc.data() as Map<String, dynamic>;
 
-    return Column(
-      children: [
+              final yarnId = data['id'] ?? doc.id;
+              final supplier = data['supplier_name'] ?? 'Unknown';
 
-        // ✅ SORT BUTTON (UNCHANGED UI)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          alignment: Alignment.centerRight,
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.sort, color: Colors.black),
-            onSelected: (val) {
-              setState(() {
-                _sortOption = val; // ✅ triggers rebuild
-              });
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'name_asc', child: Text("Name ↑")),
-              PopupMenuItem(value: 'name_desc', child: Text("Name ↓")),
-              PopupMenuItem(value: 'count_asc', child: Text("Count ↑")),
-              PopupMenuItem(value: 'count_desc', child: Text("Count ↓")),
-              PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-              PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-            ],
-          ),
-        ),
+              final state = data['state'] ?? 'RESERVED';
 
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: companies.length,
-            itemBuilder: (_, index) {
-              final company = companies[index];
+              final isVerified = state == 'VERIFIED';
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CompanyYarnListPage(
-                        companyName: company.name,
-                        docs: company.yarnDocs,
-                      ),
-                    ),
-                  );
-                },
+              final isScanned = isVerified
+                  ? true
+                  : _localScanState[doc.id] ??
+                  (data['is_scanned'] ?? false);
 
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(18),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
 
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFFFFFFF),
-                        Color(0xFFF1F8E9),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                child: Dismissible(
+                  key: ValueKey(doc.id),
 
-                  child: Row(
-                    children: [
+                  background: _swipeLeft(),
+                  secondaryBackground: _swipeRight(),
 
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(14),
+                  confirmDismiss: (direction) async {
+
+                    // ✅ LEFT SWIPE → SCAN / VERIFY
+                    if (direction == DismissDirection.startToEnd) {
+
+                      // 🚫 BLOCK IF ALREADY SCANNED / VERIFIED
+                      if (isScanned || isVerified) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Already Verified")),
+                        );
+                        return false;
+                      }
+
+                      final alreadyScanned =
+                      await yarnService.isAlreadyScanned(doc.id);
+
+                      if (alreadyScanned) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Already Verified")),
+                        );
+                        return false;
+                      }
+
+                      // 👉 OPEN QR PAGE
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VerifyQRPage(
+                            expectedQr: yarnId.toString(),
+                            yarnId: yarnId.toString(),
+                          ),
                         ),
-                        child: Icon(Icons.business, color: primaryColor),
-                      ),
+                      );
 
-                      const SizedBox(width: 16),
+                      if (result == true) {
+                        await yarnService.markAsVerified(doc.id);
 
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        setState(() {
+                          _localScanState[doc.id] = true;
+                          _ackMessage = "Verified $yarnId";
+                        });
+                      }
+
+                      return false;
+                    }
+
+                    // ✅ RIGHT SWIPE → DELETE
+                    else {
+                      final confirm =
+                      await _confirmDelete(context, yarnId.toString());
+
+                      if (confirm) {
+                        await yarnService.deleteReservedYarnById(doc.id);
+
+                        setState(() {
+                          widget.docs.removeAt(index); // ✅ REMOVE LOCALLY
+                          _ackMessage = "Deleted $yarnId";
+                        });
+                      }
+
+                      return false;
+                    }
+                  },
+
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReservedYarnDetailsPage(
+                            docId: doc.id,
+                            data: data,
+                          ),
+                        ),
+                      );
+                    },
+
+                    child: Opacity(
+                      opacity: isScanned ? 0.6 : 1,
+
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+
+                          border: isScanned
+                              ? Border.all(color: Colors.blue)
+                              : null,
+
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+
+                        child: Row(
                           children: [
-                            Text(
-                              company.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isVerified
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2,
+                                color: isVerified
+                                    ? Colors.blue
+                                    : primaryColor,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Yarn Supplier",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+
+                            const SizedBox(width: 16),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    yarnId.toString(),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    supplier,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600]),
+                                  ),
+                                ],
                               ),
                             ),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: isVerified
+                                    ? Colors.blue.withOpacity(0.15)
+                                    : Colors.green.withOpacity(0.15),
+                                borderRadius:
+                                BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                isVerified ? "VERIFIED" : "RESERVED",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isVerified
+                                      ? Colors.blue
+                                      : Colors.green,
+                                ),
+                              ),
+                            )
                           ],
                         ),
                       ),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Text(
-                          "${company.count}",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blueAccent,
-                          ),
-                        ),
-                      )
-                    ],
+                    ),
                   ),
                 ),
               );
             },
           ),
-        ),
-      ],
+
+          // ✅ ACK MESSAGE
+          if (_ackMessage != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(_ackMessage!),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
+
+  Widget _swipeLeft() => Container(
+    alignment: Alignment.centerLeft,
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+          colors: [Colors.green, Colors.greenAccent]),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: const Icon(Icons.qr_code, color: Colors.white),
+  );
+
+  Widget _swipeRight() => Container(
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    decoration: BoxDecoration(
+      color: Colors.redAccent,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: const Icon(Icons.delete, color: Colors.white),
+  );
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/yarn_service.dart';
 
 class YarnIdListView extends StatefulWidget {
   final List<QueryDocumentSnapshot> docs;
@@ -20,7 +19,6 @@ class YarnIdListView extends StatefulWidget {
 
 class _YarnIdListViewState extends State<YarnIdListView> {
 
-  // ✅ SORT FUNCTION WITH DATE
   List<QueryDocumentSnapshot> _sortDocs(List<QueryDocumentSnapshot> docs) {
     docs.sort((a, b) {
       final dataA = a.data() as Map<String, dynamic>;
@@ -32,8 +30,8 @@ class _YarnIdListViewState extends State<YarnIdListView> {
       final supplierA = (dataA['supplier_name'] ?? '').toString();
       final supplierB = (dataB['supplier_name'] ?? '').toString();
 
-      final rawA = dataA['created_at'] ?? dataA['timestamp'];
-      final rawB = dataB['created_at'] ?? dataB['timestamp'];
+      final rawA = dataA['updatedAt'];
+      final rawB = dataB['updatedAt'];
 
       DateTime dateA =
       rawA is Timestamp ? rawA.toDate() : DateTime(2000);
@@ -61,133 +59,116 @@ class _YarnIdListViewState extends State<YarnIdListView> {
 
   @override
   Widget build(BuildContext context) {
-    final YarnService yarnService = YarnService();
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('reserved_collection')
-          .snapshots(), // 🔥 REAL-TIME FIX
-      builder: (context, snapshot) {
+    // ✅ USE PASSED DOCS ONLY
+    var docs = List<QueryDocumentSnapshot>.from(widget.docs);
 
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // ✅ FILTER
+    var filteredDocs = docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final id = (data['id'] ?? doc.id).toString().toLowerCase();
+      return id.contains(widget.searchQuery.toLowerCase());
+    }).toList();
 
-        var docs = snapshot.data!.docs;
+    // ✅ SORT
+    filteredDocs = _sortDocs(filteredDocs);
 
-        // ✅ FILTER (same logic)
-        var filteredDocs = docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final id = (data['id'] ?? doc.id).toString().toLowerCase();
-          return id.contains(widget.searchQuery.toLowerCase());
-        }).toList();
+    if (filteredDocs.isEmpty) {
+      return const Center(child: Text("No Data"));
+    }
 
-        // ✅ SORT (same logic)
-        filteredDocs = _sortDocs(filteredDocs);
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: filteredDocs.length,
+      itemBuilder: (_, index) {
+        final doc = filteredDocs[index];
+        final data = doc.data() as Map<String, dynamic>;
 
-        if (filteredDocs.isEmpty) {
-          return const Center(child: Text("No Data"));
-        }
+        final yarnId = data['id'] ?? doc.id;
+        final supplier = data['supplier_name'] ?? 'Unknown';
+        final isScanned = data['is_scanned'] ?? false;
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: filteredDocs.length,
-          itemBuilder: (_, index) {
-            final doc = filteredDocs[index];
-            final data = doc.data() as Map<String, dynamic>;
+        return Opacity(
+          opacity: isScanned ? 0.6 : 1,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Colors.white, Color(0xFFF9FAFB)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: isScanned
+                  ? Border.all(color: Colors.blue, width: 1)
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                )
+              ],
+            ),
+            child: Row(
+              children: [
 
-            final yarnId = data['id'] ?? doc.id;
-            final supplier = data['supplier_name'] ?? 'Unknown';
-
-            // ✅ LIVE VALUE (FIXED)
-            final isScanned = data['is_scanned'] ?? false;
-
-            return GestureDetector(
-              child: Opacity(
-                opacity: isScanned ? 0.6 : 1,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.all(16),
+                Container(
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.white, Color(0xFFF9FAFB)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: isScanned
-                        ? Border.all(color: Colors.blue, width: 1)
-                        : null,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 6),
-                      )
-                    ],
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
+                  child: Icon(
+                    Icons.inventory_2,
+                    color: isScanned ? Colors.blue : Colors.green,
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.inventory_2,
-                          color: isScanned ? Colors.blue : Colors.green,
+                      Text(
+                        yarnId.toString(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-
-                      const SizedBox(width: 16),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              yarnId.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              supplier,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 6),
+                      Text(
+                        supplier,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
                       ),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isScanned
-                              ? Colors.blue.withOpacity(0.15)
-                              : Colors.green.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          isScanned ? "SCANNED" : "RESERVED",
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isScanned ? Colors.blue : Colors.green,
-                          ),
-                        ),
-                      )
                     ],
                   ),
                 ),
-              ),
-            );
-          },
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: isScanned
+                        ? Colors.blue.withOpacity(0.15)
+                        : Colors.green.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isScanned ? "SCANNED" : "RESERVED",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isScanned ? Colors.blue : Colors.green,
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
         );
       },
     );

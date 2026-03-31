@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/yarn_service.dart';
-import './company_list_view.dart';
 import './yarn_id_list_view.dart';
 
 class ReservedListPage extends StatefulWidget {
@@ -16,7 +15,7 @@ class _ReservedListPageState extends State<ReservedListPage> {
 
   bool _isCompanyView = true;
   String _searchQuery = '';
-  String _sortOption = 'id_asc';
+  String _sortOption = 'name_asc'; // Default sort for company view
 
   @override
   Widget build(BuildContext context) {
@@ -33,34 +32,42 @@ class _ReservedListPageState extends State<ReservedListPage> {
           style: const TextStyle(color: Colors.black),
         ),
 
-        actions: !_isCompanyView
-            ? [
+        actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort, color: Colors.black),
             onSelected: (val) => setState(() => _sortOption = val),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'id_asc', child: Text("ID ↑")),
-              PopupMenuItem(value: 'id_desc', child: Text("ID ↓")),
-              PopupMenuItem(value: 'supplier_asc', child: Text("Supplier ↑")),
-              PopupMenuItem(value: 'supplier_desc', child: Text("Supplier ↓")),
-              PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-              PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-            ],
-          )
-        ]
-            : [],
+            itemBuilder: (_) {
+              if (_isCompanyView) {
+                return const [
+                  PopupMenuItem(value: 'name_asc', child: Text("Name ↑")),
+                  PopupMenuItem(value: 'name_desc', child: Text("Name ↓")),
+                  PopupMenuItem(value: 'count_asc', child: Text("Count ↑")),
+                  PopupMenuItem(value: 'count_desc', child: Text("Count ↓")),
+                  PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
+                  PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
+                ];
+              } else {
+                return const [
+                  PopupMenuItem(value: 'id_asc', child: Text("ID ↑")),
+                  PopupMenuItem(value: 'id_desc', child: Text("ID ↓")),
+                  PopupMenuItem(value: 'supplier_asc', child: Text("Supplier ↑")),
+                  PopupMenuItem(value: 'supplier_desc', child: Text("Supplier ↓")),
+                  PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
+                  PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
+                ];
+              }
+            },
+          ),
+        ],
       ),
 
       body: Column(
         children: [
-
-          // SEARCH BAR WITHOUT GREEN SHADE
           Padding(
             padding: const EdgeInsets.all(16),
             child: _searchBar(),
           ),
 
-          // TOGGLE BUTTON
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _toggle(),
@@ -68,7 +75,6 @@ class _ReservedListPageState extends State<ReservedListPage> {
 
           const SizedBox(height: 10),
 
-          // MAIN LIST
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: yarnService.getReservedYarns(),
@@ -83,7 +89,7 @@ class _ReservedListPageState extends State<ReservedListPage> {
                   return CompanyListView(
                     docs: docs,
                     searchQuery: _searchQuery,
-                    // Remove green shade in items
+                    sortOption: _sortOption,
                     showIconBackground: false,
                   );
                 } else {
@@ -101,11 +107,10 @@ class _ReservedListPageState extends State<ReservedListPage> {
     );
   }
 
-  // SEARCH BAR WITHOUT GREEN SHADES
   Widget _searchBar() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white, // Removed gradient
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -127,7 +132,6 @@ class _ReservedListPageState extends State<ReservedListPage> {
     );
   }
 
-  // TOGGLE BUTTON (UNCHANGED)
   Widget _toggle() {
     return LayoutBuilder(
       builder: (context, constraints) {

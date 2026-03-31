@@ -54,7 +54,15 @@ class YarnService {
   Stream<QuerySnapshot> getReservedYarns() {
     return _db
         .collection('reserved_collection')
-        .where('state', whereIn: ['reserved', 'RESERVED'])
+        .where(
+      'state',
+      whereIn: [
+        'reserved',
+        'RESERVED',
+        'VERIFIED', // ✅ ADDED
+        'verified', // ✅ ADDED (safety for lowercase)
+      ],
+    )
         .snapshots();
   }
 

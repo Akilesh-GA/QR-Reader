@@ -24,67 +24,71 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(automaticallyImplyLeading: false,title: const Text('Yarn Scanner')),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: _isLoading ? _shimmerLoader() : _mainContent(context),
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        title: const Text(
+          'Yarn Scanner',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+      ),
+      // ✅ PLACED INSIDE A CENTER WIDGET TO OCCUPY THE MID-POINT OF THE DISPLAY
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: _isLoading ? _shimmerLoader() : _mainContent(context),
+        ),
       ),
     );
   }
 
+  // ✅ SIMPLIFIED DIRECT MIDDLE VERTICAL LAYOUT FOR CARDS
   Widget _mainContent(BuildContext context) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Empty space at top to center cards
-        const SizedBox(height: 0),
-
-        // Cards in the middle
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _fancyCard(
-              context,
-              title: 'Reserved List',
-              subtitle: 'Move yarn from rack to floor',
-              icon: Icons.inventory_2_outlined,
-              colors: [Colors.greenAccent, Colors.green.shade700],
-              onTap: () => Navigator.pushNamed(context, '/reserved'),
-            ),
-            const SizedBox(height: 16),
-            _fancyCard(
-              context,
-              title: 'Dispatch List',
-              subtitle: 'Verify and dispatch moved yarn',
-              icon: Icons.local_shipping_outlined,
-              colors: [Colors.orangeAccent, Colors.deepOrange],
-              onTap: () => Navigator.pushNamed(context, '/dispatch'),
-            ),
-            const SizedBox(height: 16),
-            _fancyCard(
-              context,
-              title: 'Add Yarn',
-              subtitle: 'Scan QR to add yarn to inventory',
-              icon: Icons.qr_code_scanner,
-              colors: [Colors.pinkAccent.shade100, Colors.red.shade700],
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ScanCodePage(
-                    title: 'Add New Yarn',
-                    isAddMode: true,
-                  ),
-                ),
+        _fancyCard(
+          context,
+          title: 'Reserved List',
+          subtitle: 'Move yarn from rack to floor',
+          icon: Icons.inventory_2_outlined,
+          colors: [Colors.greenAccent, Colors.green.shade700],
+          onTap: () => Navigator.pushNamed(context, '/reserved'),
+        ),
+        const SizedBox(height: 16),
+        _fancyCard(
+          context,
+          title: 'Dispatch List',
+          subtitle: 'Verify and dispatch moved yarn',
+          icon: Icons.local_shipping_outlined,
+          colors: [Colors.orangeAccent, Colors.deepOrange],
+          onTap: () => Navigator.pushNamed(context, '/dispatch'),
+        ),
+        const SizedBox(height: 16),
+        _fancyCard(
+          context,
+          title: 'Add Yarn',
+          subtitle: 'Scan QR to add yarn to inventory',
+          icon: Icons.qr_code_scanner,
+          colors: [Colors.pinkAccent.shade100, Colors.red.shade700],
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ScanCodePage(
+                title: 'Add New Yarn',
+                isAddMode: true,
               ),
             ),
-          ],
-        ),
-
-        // Footer text at the bottom
-        Text(
-          '© 2026 Yarn Scanner. All rights reserved.',
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          textAlign: TextAlign.center
+          ),
         ),
       ],
     );
@@ -135,14 +139,18 @@ class _MainPageState extends State<MainPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 6),
-                Text(subtitle,
-                    style: const TextStyle(color: Colors.white70, fontSize: 15)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.white70, fontSize: 15),
+                ),
               ],
             ),
           ),
@@ -154,10 +162,10 @@ class _MainPageState extends State<MainPage> {
   Widget _shimmerLoader() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.max,
+      mainAxisSize: MainAxisSize.min,
       children: List.generate(3, (index) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: EdgeInsets.only(bottom: index == 2 ? 0 : 16),
           child: Shimmer.fromColors(
             baseColor: Colors.grey.shade300,
             highlightColor: Colors.grey.shade100,

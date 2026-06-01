@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -60,8 +61,9 @@ class _YarnDataPageState extends State<YarnDataPage> {
         .join(' ');
   }
 
-  /// Show professional acknowledgment/toast
+  /// ✅ CUSTOM TOAST SNACKBAR MATCHING APPLICATION DESIGN SPECIFICATIONS
   void showAck(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 3),
@@ -73,9 +75,14 @@ class _YarnDataPageState extends State<YarnDataPage> {
         content: Row(
           children: [
             Image.asset(
-              'assets/icon/app_icon.png', // Make sure logo exists in assets
+              'assets/icon/app_icon.png',
               height: 24,
               width: 24,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 24,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -104,15 +111,17 @@ class _YarnDataPageState extends State<YarnDataPage> {
 
       if (!mounted) return;
 
-      // Show acknowledgment
       showAck(context, 'Yarn confirmed successfully!');
 
-      // Navigate after short delay
       Future.delayed(const Duration(milliseconds: 800), () {
-        Navigator.popUntil(context, (route) => route.isFirst);
+        if (mounted) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
       });
     } finally {
-      setState(() => isProcessing = false);
+      if (mounted) {
+        setState(() => isProcessing = false);
+      }
     }
   }
 
@@ -126,7 +135,7 @@ class _YarnDataPageState extends State<YarnDataPage> {
     );
   }
 
-  /// Export yarn data as PDF
+  /// ✅ EXPORT WITH UPDATED ADDYARNS SUB-FOLDER PATTERN
   Future<void> _exportAsPdf() async {
     if (yarnData == null) return;
     final pdf = pw.Document();
@@ -148,24 +157,27 @@ class _YarnDataPageState extends State<YarnDataPage> {
               pw.SizedBox(height: 20),
               ...yarnData!.entries
                   .where((e) =>
-              !['notFound', 'status', 'createdAt', 'rawQr', 'qrimage']
+              !['notfound', 'status', 'createdat', 'rawqr', 'qrimage']
                   .contains(e.key.toLowerCase()))
                   .map(
-                    (e) => pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      _capitalize(e.key),
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
+                    (e) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        _capitalize(e.key).toUpperCase(),
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    pw.Text(
-                      e.value.toString(),
-                      style: pw.TextStyle(fontSize: 14),
-                    ),
-                  ],
+                      pw.Text(
+                        e.value.toString(),
+                        style: const pw.TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
               )
                   .toList(),
@@ -177,15 +189,22 @@ class _YarnDataPageState extends State<YarnDataPage> {
 
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final folder = Directory('${dir.path}/YarnScanner');
-      if (!await folder.exists()) await folder.create();
 
-      final uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
-      final file = File('${folder.path}/yarn_$uniqueId.pdf');
+      // Fallback evaluation parameters matching standard raw data string conversions
+      final rawId = (yarnData!['id'] ?? yarnData!['yarnId'] ?? widget.qr).toString();
+      final sanitizedId = rawId.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
+
+      // ✅ FIX: Formatted explicitly to match YarnScanner/AddYarns pattern setup
+      final folder = Directory('${dir.path}/YarnScanner/AddYarns');
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final file = File('${folder.path}/$sanitizedId.pdf');
       await file.writeAsBytes(await pdf.save());
 
       if (!mounted) return;
-      showAck(context, 'PDF exported successfully!');
+      showAck(context, 'PDF saved to /AddYarns/$sanitizedId.pdf successfully!');
     } catch (_) {
       if (!mounted) return;
       showAck(context, 'Failed to export PDF');
@@ -194,17 +213,38 @@ class _YarnDataPageState extends State<YarnDataPage> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Colors.green.shade700;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        elevation: 0,
+        scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
-        title: const Text('Yarn Invoice'),
-        automaticallyImplyLeading: false,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          onPressed: () {
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        title: const Text(
+          'Yarn Invoice',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
         actions: [
           IconButton(
             onPressed: _exportAsPdf,
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.grey),
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.black54),
             tooltip: 'Export as PDF',
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: isLoading
@@ -216,73 +256,104 @@ class _YarnDataPageState extends State<YarnDataPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Invoice-style data container
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: yarnData!.entries
-                    .where((e) => ![
-                  'notFound',
-                  'status',
-                  'createdAt',
-                  'rawQr',
-                  'qrimage'
-                ].contains(e.key.toLowerCase()))
-                    .map(
-                      (e) => Container(
-                    padding:
-                    const EdgeInsets.symmetric(vertical: 10),
+            const SizedBox(height: 12),
+
+            // ✅ INVOICE CARD STACK IMPLEMENTATION MATCHING DESIGN PRESETS
+            Stack(
+              children: [
+                // 🔥 BACK LAYER SHADOW EFFECT
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
                     decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.grey.shade300,
-                        ),
+                      color: Colors.grey.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                  ),
+                ),
+                // 🧾 MAIN INVOICE CARD
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.97),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 🏷 INVOICE HEADER AREA
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "YARN DATA",
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      color: primaryColor,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Statement Summary",
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Icon(
+                                Icons.receipt_long,
+                                color: primaryColor.withOpacity(0.3),
+                                size: 36,
+                              )
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(thickness: 1.2),
+                          const SizedBox(height: 10),
+
+                          // 📊 INVOICE ROWS LISTING (Filtered & Formatted)
+                          ...yarnData!.entries
+                              .where((e) => ![
+                            'notfound',
+                            'status',
+                            'createdat',
+                            'rawqr',
+                            'qrimage'
+                          ].contains(e.key.toLowerCase()))
+                              .map((e) => _invoiceRow(_capitalize(e.key), e.value.toString())),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _capitalize(e.key),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: Colors.black54),
-                        ),
-                        Flexible(
-                          child: Text(
-                            e.value.toString(),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Colors.black87),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                )
-                    .toList(),
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             if (isProcessing)
               const Center(
-                  child:
-                  CircularProgressIndicator(color: Colors.orange))
+                  child: CircularProgressIndicator(color: Colors.orange))
             else
               Row(
                 children: [
@@ -372,6 +443,56 @@ class _YarnDataPageState extends State<YarnDataPage> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  // 🧾 INVOICE ROW CONFIGURATION REPLICATING THE UNIFIED METRIC SYSTEM
+  Widget _invoiceRow(String title, String value) {
+    final isImportant = title.toLowerCase().contains("count") ||
+        title.toLowerCase().contains("weight") ||
+        title.toLowerCase().contains("id");
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 4,
+                child: Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 6,
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontWeight: isImportant ? FontWeight.bold : FontWeight.w600,
+                    fontSize: isImportant ? 14 : 13,
+                    color: isImportant ? Colors.green.shade700 : Colors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 1,
+            color: Colors.grey.shade100,
+          ),
+        ],
       ),
     );
   }

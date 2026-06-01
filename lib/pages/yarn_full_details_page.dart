@@ -55,24 +55,39 @@ class _YarnFullDetailsPageState extends State<YarnFullDetailsPage>
   Widget build(BuildContext context) {
     final primaryColor = Colors.green.shade700;
 
-    // ✅ FIX: preserve order
-    final orderedKeys = widget.data.keys.toList();
+    // ✅ FIX: preserve order & filter out 'rawQr' key completely
+    final orderedKeys = widget.data.keys
+        .where((key) => key.toLowerCase() != 'rawqr')
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-
       body: SafeArea(
-        minimum: const EdgeInsets.symmetric(vertical: 10),
-        child: FadeTransition(
-          opacity: _fade,
-          child: SlideTransition(
-            position: _slide,
-            child: Column(
-              children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🔙 BACK ARROW CONTAINER
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: IconButton(
+                alignment: Alignment.centerLeft,
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+                onPressed: () {
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ),
 
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: SlideTransition(
+                    position: _slide,
                     child: ScaleTransition(
                       scale: _scale,
                       child: Stack(
@@ -92,13 +107,13 @@ class _YarnFullDetailsPageState extends State<YarnFullDetailsPage>
                             ),
                           ),
 
-                          // 🧾 MAIN CARD
+                          // 🧾 MAIN INVOICE CARD
                           ClipRRect(
                             borderRadius: BorderRadius.circular(22),
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                               child: Container(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.97),
                                   borderRadius: BorderRadius.circular(22),
@@ -110,38 +125,50 @@ class _YarnFullDetailsPageState extends State<YarnFullDetailsPage>
                                     )
                                   ],
                                 ),
-
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
 
-                                    // 🏷 HEADER
-                                    Text(
-                                      "YARN DETAILS",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: primaryColor,
-                                        letterSpacing: 1,
-                                      ),
+                                    // 🏷 INVOICE HEADER
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "INVOICE",
+                                              style: TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w900,
+                                                color: primaryColor,
+                                                letterSpacing: 1.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              "Yarn Details Summary",
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Icon(
+                                          Icons.receipt_long,
+                                          color: primaryColor.withOpacity(0.3),
+                                          size: 36,
+                                        )
+                                      ],
                                     ),
 
-                                    const SizedBox(height: 4),
-
-                                    Text(
-                                      "Details Summary",
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 12),
-                                    Divider(),
-
+                                    const SizedBox(height: 16),
+                                    const Divider(thickness: 1.2),
                                     const SizedBox(height: 10),
 
-                                    // 📊 DETAILS
+                                    // 📊 DETAILS LIST
                                     Expanded(
                                       child: ListView.builder(
                                         itemCount: orderedKeys.length,
@@ -166,44 +193,49 @@ class _YarnFullDetailsPageState extends State<YarnFullDetailsPage>
                     ),
                   ),
                 ),
-
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  // 🧾 ROW
+  // 🧾 INVOICE ROW
   Widget _invoiceRow(String title, String value) {
     final isImportant = title.toLowerCase().contains("count") ||
         title.toLowerCase().contains("amount") ||
         title.toLowerCase().contains("total");
 
+    final cleanTitle = title.replaceAll('_', ' ').toUpperCase();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: Text(
-                  title,
+                  cleanTitle,
                   style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 5,
+                flex: 6,
                 child: Text(
                   value,
                   textAlign: TextAlign.right,
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: isImportant ? FontWeight.bold : FontWeight.w600,
                     fontSize: isImportant ? 15 : 14,
                     color: isImportant ? Colors.green.shade700 : Colors.black,
                   ),
@@ -211,9 +243,7 @@ class _YarnFullDetailsPageState extends State<YarnFullDetailsPage>
               ),
             ],
           ),
-
-          const SizedBox(height: 8),
-
+          const SizedBox(height: 12),
           Container(
             height: 1,
             color: Colors.grey.shade200,

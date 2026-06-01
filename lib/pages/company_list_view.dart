@@ -112,63 +112,72 @@ class _CompanyListViewState extends State<CompanyListView> {
 
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
-          child: InkWell(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CompanyYarnListPage(
-                    companyName: companyName,
-                    docs: compDocs,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 6),
+              )
+            ],
+          ),
+          // ✅ WRAPPED WITH MATERIAL AND DECORATED INK TO PRESERVE RIPPLE EFFECT
+          child: Material(
+            color: Colors.transparent,
+            child: Ink(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Colors.white, Color(0xFFF9FAFB)],
                 ),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
-                  )
-                ],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CompanyYarnListPage(
+                        companyName: companyName,
+                        docs: compDocs,
+                      ),
                     ),
-                    child: const Icon(Icons.business, color: Colors.green),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          companyName,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "$unverifiedCount reserved",
-                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                        )
-                      ],
-                    ),
+                        child: const Icon(Icons.business, color: Colors.green),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              companyName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "$unverifiedCount reserved",
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                            )
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
                   ),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
-                ],
+                ),
               ),
             ),
           ),

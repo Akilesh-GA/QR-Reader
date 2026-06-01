@@ -91,6 +91,32 @@ class _DispatchListPageState extends State<DispatchListPage>
     return docs;
   }
 
+  /// Builds a stylized PopupMenuItem with a checkmark for the selected item
+  PopupMenuItem<String> _buildPopupMenuItem(String value, String text, Color primaryColor) {
+    final isSelected = _sortOption == value;
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? primaryColor : Colors.black87,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          if (isSelected)
+            Icon(
+              Icons.check_circle,
+              color: primaryColor,
+              size: 18,
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Colors.orange.shade600;
@@ -99,47 +125,60 @@ class _DispatchListPageState extends State<DispatchListPage>
       backgroundColor: const Color(0xFFF5F7FA),
 
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         elevation: 0,
+        scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          onPressed: () {
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
         title: const Text(
           'Dispatched Yarns',
-          style: TextStyle(color: Colors.black),
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
 
-        // ✅ SORT BUTTON (ONLY ADDITION)
+        // ✅ SORT BUTTON
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort, color: Colors.black),
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             color: Colors.white,
             onSelected: (value) {
-              setState(() {
-                _sortOption = value;
-              });
+              if (mounted) {
+                setState(() {
+                  _sortOption = value;
+                });
+              }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                  value: 'date_desc', child: Text('Date ↓ (Newest)')),
-              const PopupMenuItem(
-                  value: 'date_asc', child: Text('Date ↑ (Oldest)')),
-              const PopupMenuItem(
-                  value: 'id_asc', child: Text('ID ↑')),
-              const PopupMenuItem(
-                  value: 'id_desc', child: Text('ID ↓')),
-              const PopupMenuItem(
-                  value: 'supplier_asc', child: Text('Supplier ↑')),
-              const PopupMenuItem(
-                  value: 'supplier_desc', child: Text('Supplier ↓')),
+              _buildPopupMenuItem('date_desc', 'Date ↓ (Newest)', primaryColor),
+              _buildPopupMenuItem('date_asc', 'Date ↑ (Oldest)', primaryColor),
+              _buildPopupMenuItem('id_asc', 'ID ↑', primaryColor),
+              _buildPopupMenuItem('id_desc', 'ID ↓', primaryColor),
+              _buildPopupMenuItem('supplier_asc', 'Supplier ↑', primaryColor),
+              _buildPopupMenuItem('supplier_desc', 'Supplier ↓', primaryColor),
             ],
-          )
+          ),
+          const SizedBox(width: 8),
         ],
       ),
 
       body: Column(
         children: [
 
-          // 🔍 SEARCH BAR (UNCHANGED)
+          // 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(16),
             child: Container(
@@ -163,7 +202,9 @@ class _DispatchListPageState extends State<DispatchListPage>
                       ? IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () {
-                      setState(() => _searchQuery = '');
+                      if (mounted) {
+                        setState(() => _searchQuery = '');
+                      }
                     },
                   )
                       : null,
@@ -172,9 +213,11 @@ class _DispatchListPageState extends State<DispatchListPage>
                   const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.trim();
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _searchQuery = value.trim();
+                    });
+                  }
                 },
               ),
             ),
@@ -267,9 +310,15 @@ class _DispatchListPageState extends State<DispatchListPage>
 
                     final yarnId =
                         data['id'] ?? data['yarnId'] ?? doc.id;
-
                     final supplier =
                         data['supplier_name'] ?? 'Unknown';
+                    final isScanned = data['is_scanned'] ?? false;
+
+                    // 📦 FETCHING ADDITIONAL METADATA TO MATCH RESERVED DETAIL PRESETS
+                    final yarnType = data['yarn_type'] ?? data['type'] ?? 'N/A';
+                    final weight = data['weight'] ?? data['net_weight'] ?? 'N/A';
+                    final color = data['color'] ?? 'N/A';
+                    final lotNumber = data['lot_number'] ?? data['lotNo'] ?? 'N/A';
 
                     final animation =
                     Tween<double>(begin: 0, end: 1)
@@ -292,96 +341,106 @@ class _DispatchListPageState extends State<DispatchListPage>
                         child: Transform.scale(
                           scale:
                           0.95 + (0.05 * animation.value),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 14),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Colors.white,
-                                  Color(0xFFF9FAFB)
+                          child: Opacity(
+                            opacity: isScanned ? 0.6 : 1,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: isScanned
+                                    ? Border.all(color: Colors.blue)
+                                    : null,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  )
                                 ],
                               ),
-                              borderRadius:
-                              BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black
-                                      .withOpacity(0.04),
-                                  blurRadius: 10,
-                                  offset:
-                                  const Offset(0, 6),
-                                )
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-
-                                Container(
-                                  padding:
-                                  const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: primaryColor
-                                        .withOpacity(0.1),
-                                    borderRadius:
-                                    BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.local_shipping,
-                                    color: primaryColor,
-                                  ),
-                                ),
-
-                                const SizedBox(width: 16),
-
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      Text(
-                                        yarnId.toString(),
-                                        style:
-                                        const TextStyle(
-                                          fontWeight:
-                                          FontWeight.w600,
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: isScanned
+                                              ? Colors.blue.withOpacity(0.1)
+                                              : primaryColor.withOpacity(0.1),
+                                          borderRadius:
+                                          BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          Icons.local_shipping,
+                                          color: isScanned ? Colors.blue : primaryColor,
                                         ),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        supplier,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                          Colors.grey[600],
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              yarnId.toString(),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              supplier,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: isScanned
+                                              ? Colors.blue.withOpacity(0.15)
+                                              : Colors.orange.withOpacity(0.15),
+                                          borderRadius:
+                                          BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          isScanned ? "SCANNED" : "DISPATCHED",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: isScanned ? Colors.blue : Colors.orange,
+                                          ),
+                                        ),
+                                      )
                                     ],
                                   ),
-                                ),
 
-                                Container(
-                                  padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange
-                                        .withOpacity(0.15),
-                                    borderRadius:
-                                    BorderRadius.circular(20),
+                                  // 📄 EXTENDED DETAIL ROW PACKET (Matches full detail view specifications)
+                                  const SizedBox(height: 14),
+                                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                                  const SizedBox(height: 12),
+
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildDetailBadge("Type", yarnType.toString()),
+                                      _buildDetailBadge("Lot No", lotNumber.toString()),
+                                      _buildDetailBadge("Color", color.toString()),
+                                      _buildDetailBadge("Weight", "${weight.toString()} kg"),
+                                    ],
                                   ),
-                                  child: const Text(
-                                    "DISPATCHED",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight:
-                                      FontWeight.w600,
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                )
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -394,6 +453,33 @@ class _DispatchListPageState extends State<DispatchListPage>
           ),
         ],
       ),
+    );
+  }
+
+  /// Helper widget builder to form standard clean micro metadata badges within the layout
+  Widget _buildDetailBadge(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[400],
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -18,72 +18,89 @@ class _ReservedListPageState extends State<ReservedListPage> {
   String _searchQuery = '';
   String _sortOption = 'name_asc'; // Default sort for company view
 
+  // Helper method to reset default sort options when switching views
+  void _toggleView(bool isCompany) {
+    if (!mounted) return;
+    setState(() {
+      _isCompanyView = isCompany;
+      _sortOption = isCompany ? 'name_asc' : 'id_asc';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         elevation: 0,
         backgroundColor: Colors.white,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+          onPressed: () {
+            // Guarding against deactivated/unsafe ancestor tree errors during pop navigation
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
         title: Text(
           _isCompanyView ? "Companies" : "Reserved Yarns",
-          style: const TextStyle(color: Colors.black),
-        ),
-
-        actions: [
-          Theme(
-            data: Theme.of(context).copyWith(
-              popupMenuTheme: const PopupMenuThemeData(
-                color: Colors.white, // background
-                textStyle: TextStyle(color: Colors.white),
-              ),
-            ),
-            child: PopupMenuButton<String>(
-              icon: const Icon(Icons.sort, color: Colors.black),
-              onSelected: (val) => setState(() => _sortOption = val),
-              itemBuilder: (_) {
-                if (_isCompanyView) {
-                  return const [
-                    PopupMenuItem(value: 'name_asc', child: Text("Name ↑")),
-                    PopupMenuItem(value: 'name_desc', child: Text("Name ↓")),
-                    PopupMenuItem(value: 'count_asc', child: Text("Count ↑")),
-                    PopupMenuItem(value: 'count_desc', child: Text("Count ↓")),
-                    PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-                    PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-                  ];
-                } else {
-                  return const [
-                    PopupMenuItem(value: 'id_asc', child: Text("ID ↑")),
-                    PopupMenuItem(value: 'id_desc', child: Text("ID ↓")),
-                    PopupMenuItem(value: 'supplier_asc', child: Text("Supplier ↑")),
-                    PopupMenuItem(value: 'supplier_desc', child: Text("Supplier ↓")),
-                    PopupMenuItem(value: 'date_asc', child: Text("Date ↑")),
-                    PopupMenuItem(value: 'date_desc', child: Text("Date ↓")),
-                  ];
-                }
-              },
-            ),
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
+        ),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort, color: Colors.black),
+            onSelected: (val) {
+              if (mounted) {
+                setState(() => _sortOption = val);
+              }
+            },
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            color: Colors.white,
+            itemBuilder: (_) {
+              if (_isCompanyView) {
+                return [
+                  _buildPopupMenuItem('name_asc', "Name ↑"),
+                  _buildPopupMenuItem('name_desc', "Name ↓"),
+                  _buildPopupMenuItem('count_asc', "Count ↑"),
+                  _buildPopupMenuItem('count_desc', "Count ↓"),
+                  _buildPopupMenuItem('date_asc', "Date ↑"),
+                  _buildPopupMenuItem('date_desc', "Date ↓"),
+                ];
+              } else {
+                return [
+                  _buildPopupMenuItem('id_asc', "ID ↑"),
+                  _buildPopupMenuItem('id_desc', "ID ↓"),
+                  _buildPopupMenuItem('supplier_asc', "Supplier ↑"),
+                  _buildPopupMenuItem('supplier_desc', "Supplier ↓"),
+                  _buildPopupMenuItem('date_asc', "Date ↑"),
+                  _buildPopupMenuItem('date_desc', "Date ↓"),
+                ];
+              }
+            },
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
             child: _searchBar(),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _toggle(),
           ),
-
           const SizedBox(height: 10),
-
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: yarnService.getReservedYarns(),
@@ -116,6 +133,32 @@ class _ReservedListPageState extends State<ReservedListPage> {
     );
   }
 
+  /// Builds a stylized PopupMenuItem with a checkmark for the selected item
+  PopupMenuItem<String> _buildPopupMenuItem(String value, String text) {
+    final isSelected = _sortOption == value;
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? const Color(0xFF1B5E20) : Colors.black87,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          if (isSelected)
+            const Icon(
+              Icons.check_circle,
+              color: Color(0xFF43A047),
+              size: 18,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _searchBar() {
     return Container(
       decoration: BoxDecoration(
@@ -136,7 +179,11 @@ class _ReservedListPageState extends State<ReservedListPage> {
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(vertical: 14),
         ),
-        onChanged: (val) => setState(() => _searchQuery = val),
+        onChanged: (val) {
+          if (mounted) {
+            setState(() => _searchQuery = val);
+          }
+        },
       ),
     );
   }
@@ -169,8 +216,9 @@ class _ReservedListPageState extends State<ReservedListPage> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.green.withOpacity(0.5),
-                        blurRadius: 12,
+                        color: Colors.green.withOpacity(0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
                       )
                     ],
                   ),
@@ -194,16 +242,19 @@ class _ReservedListPageState extends State<ReservedListPage> {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _isCompanyView = isCompany),
-        child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 250),
-            style: TextStyle(
-              color: selected ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
-              fontSize: selected ? 16 : 14,
+        onTap: () => _toggleView(isCompany),
+        child: Container(
+          color: Colors.transparent, // Expands hit testing area
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 250),
+              style: TextStyle(
+                color: selected ? Colors.white : Colors.black54,
+                fontWeight: FontWeight.bold,
+                fontSize: selected ? 15 : 14,
+              ),
+              child: Text(text),
             ),
-            child: Text(text),
           ),
         ),
       ),

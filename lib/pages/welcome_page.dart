@@ -86,7 +86,7 @@ class _WelcomePageState extends State<WelcomePage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  /// 🔥 LOGO IMAGE (replaced icon)
+                  /// 🔥 ANIMATED LOGO CONTAINER
                   AnimatedBuilder(
                     animation: _logoController,
                     builder: (context, child) {
@@ -114,6 +114,11 @@ class _WelcomePageState extends State<WelcomePage>
                                 'assets/icon/app_icon.png',
                                 width: size.width * 0.27,
                                 fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                  Icons.qr_code_2,
+                                  color: Colors.white,
+                                  size: 50,
+                                ),
                               ),
                             ),
                           ),
@@ -162,61 +167,56 @@ class _WelcomePageState extends State<WelcomePage>
                 child: AnimatedBuilder(
                   animation: _buttonController,
                   builder: (context, child) {
-                    return Stack(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(30),
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFFFA500),
-                                Color(0xFFFF7A00)
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.4),
-                                blurRadius: 20,
-                                spreadRadius: 2,
-                              ),
-                            ],
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withOpacity(0.4),
+                            blurRadius: 20,
+                            spreadRadius: 2,
                           ),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushReplacementNamed(
-                                  context, '/home');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 60, vertical: 20),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Ink(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color(0xFFFFA500),
+                                  Color(0xFFFF7A00)
+                                ],
+                              ),
                             ),
-                            child: const Text(
-                              'Get Started',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.pushReplacementNamed(context, '/home');
+                              },
+                              splashColor: Colors.white.withOpacity(0.2),
+                              highlightColor: Colors.white.withOpacity(0.1),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 60, vertical: 20),
+                                child: Text(
+                                  'Get Started',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     );
                   },
                 ),
-              ),
-            ),
-
-            const Positioned(
-              bottom: 30,
-              left: 0,
-              right: 0,
-              child: Text(
-                '© 2026 Yarn Scanner. All rights reserved.',
-                style: TextStyle(color: Colors.black54, fontSize: 12),
-                textAlign: TextAlign.center,
               ),
             ),
           ],

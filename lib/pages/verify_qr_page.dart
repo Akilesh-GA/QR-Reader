@@ -62,8 +62,10 @@ class _VerifyQRPageState extends State<VerifyQRPage>
     super.dispose();
   }
 
-  /// ✅ Common SnackBar Template
+  /// ✅ CUSTOM TOAST SNACKBAR IN THE SAME STYLE
   void _showAck(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 2),
@@ -78,6 +80,11 @@ class _VerifyQRPageState extends State<VerifyQRPage>
               'assets/icon/app_icon.png',
               height: 24,
               width: 24,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 24,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -106,7 +113,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
           .get();
 
       if (query.docs.isEmpty) {
-        if (mounted) _showAck('QR not found');
+        _showAck('QR not found');
         return;
       }
 
@@ -117,7 +124,7 @@ class _VerifyQRPageState extends State<VerifyQRPage>
       final isAlreadyScanned = (data['is_scanned'] ?? false) as bool;
 
       if (state == 'VERIFIED' || isAlreadyScanned) {
-        if (mounted) _showAck('Already scanned');
+        _showAck('Already scanned');
         return;
       }
 
@@ -128,9 +135,9 @@ class _VerifyQRPageState extends State<VerifyQRPage>
         'last_state_change': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) _showAck('Scan successful');
+      _showAck('Scan successful');
     } catch (_) {
-      if (mounted) _showAck('Scan failed');
+      _showAck('Scan failed');
     }
   }
 
